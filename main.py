@@ -3,7 +3,15 @@
 
 from flask import Flask, request, jsonify
 import logging
-import random
+
+import numpy as np
+import joblib as jb
+from keras.models import load_model
+
+# Грузим обученную модель диабета
+diabetes_model = load_model('diabetes.h5')
+# Грузим скейлер диабета
+diabetes_scaler = jb.load('scaler.pkl')
 
 app = Flask(__name__)
 
@@ -21,6 +29,9 @@ HELP_TEXT = 'Я помогу тебе определить, есть ли у т�
 # Текст, когда пользователь сказал чепуху в начале
 HELLO_FAIL_ANS_TEXT = 'Что-то я не могу понять, что именно ты имеешь ' \
                       'ввиду. Повтори пожалуйста, желаешь начать?'
+
+DIABET_TRUE_TEXT = 'У вас есть предрасположенность к диабету'
+DIABET_FALSE_TEXT = 'У вас нет предрасположенности к диабету'
 
 # Кнопки при старте
 START_BUTTONS = [
@@ -74,31 +85,30 @@ def handle_dialog(res, req):
         # Кнопочки
         res['response']['buttons'] = START_BUTTONS
 
-        # Стартанули ли сессию
+        # Создаём для пользователя служебную информацию
         sessionStorage[user_id] = {
-            'session_started': False
+            'session_started': False,
+            'age': None,
+            'glu': None,
+            'height': None,
+            'weight': None
         }
         return
 
+    # Сессия не началась
     if sessionStorage[user_id]['session_started'] is False:
         if get_help(req):
             res['response']['text'] = HELP_TEXT
-            res['response']['buttons'] = [
-                {
-                    'title': 'Помощь',
-                    'hide': True
-                },
-                {
-                    'title': 'Да',
-                    'hide': True
-                },
-                {
-                    'title': 'Нет',
-                    'hide': True
-                }
-            ]
+            res['response']['buttons'] = START_BUTTONS
         # Проверяем согласие
         elif get_approval(req):
+            # Выводим результат пользователю
+            if predict_diabetes(user_id):
+                res['response']['text'] = HELP_TEXT
+                res['response']['buttons'] = START_BUTTONS
+            else:
+                res['response']['text'] = HELP_TEXT
+                res['response']['buttons'] = START_BUTTONS
             res['end_session'] = True
         # Проверяем отказ
         elif get_rejection(req):
@@ -109,12 +119,7 @@ def handle_dialog(res, req):
         else:
             # Если че-то инородное
             res['response']['text'] = HELLO_FAIL_ANS_TEXT
-            res['response']['buttons'] = [
-                {
-                    'title': 'Помощь',
-                    'hide': True
-                }
-            ]
+            res['response']['buttons'] = START_BUTTONS
 
 
 def get_approval(req):
@@ -130,6 +135,25 @@ def get_rejection(req):
 def get_help(req):
     """ Проверяем, нужна ли пользователю помощь """
     return 'помощь' in req['request']['nlu']['tokens']
+
+
+def model_predict(array):
+    """ Предсказание нейросети по предрасположенности к диабету """
+    return diabetes_model.predict(
+        diabetes_scaler.transform(array)
+    ).round().astype(int)
+
+
+def predict_diabetes(user_id):
+    # Предсказываем есть ли диабет или нет
+    return model_predict(np.array(
+        [[
+            sessionStorage[user_id]['glu'],
+            round(sessionStorage[user_id]['weight'] /
+                  sessionStorage[user_id]['height'] ** 2, 2),
+            sessionStorage[user_id]['age']
+        ]]
+    ))
 
 
 if __name__ == '__main__':
