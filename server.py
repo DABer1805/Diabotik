@@ -30,8 +30,10 @@ HELP_TEXT = 'Я помогу тебе определить, есть ли у т�
 HELLO_FAIL_ANS_TEXT = 'Что-то я не могу понять, что именно ты имеешь ' \
                       'ввиду. Повтори пожалуйста, желаешь начать?'
 
-DIABET_TRUE_TEXT = 'У вас есть предрасположенность к диабету'
-DIABET_FALSE_TEXT = 'У вас нет предрасположенности к диабету'
+DIABETES_TRUE_TEXT = 'У вас есть предрасположенность к диабету'
+DIABETES_FALSE_TEXT = 'У вас нет предрасположенности к диабету'
+
+RESTART_TEXT = 'Желаете продолжить?'
 
 # Кнопки при старте
 START_BUTTONS = [
@@ -104,12 +106,16 @@ def handle_dialog(res, req):
         elif get_approval(req):
             # Выводим результат пользователю
             if predict_diabetes(user_id):
-                res['response']['text'] = HELP_TEXT
+                res['response']['text'] = DIABETES_TRUE_TEXT
                 res['response']['buttons'] = START_BUTTONS
             else:
-                res['response']['text'] = HELP_TEXT
+                res['response']['text'] = DIABETES_FALSE_TEXT
                 res['response']['buttons'] = START_BUTTONS
-            res['end_session'] = True
+            res['response']['text'] += RESTART_TEXT
+            # Проверяем хочет ли пользователь по второму разу тестить навык
+            if get_approval(req):
+                # Останавливаем сессию
+                res['end_session'] = True
         # Проверяем отказ
         elif get_rejection(req):
             # Пользователь ушел
